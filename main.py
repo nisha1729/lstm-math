@@ -150,8 +150,8 @@ def generate_all_equations(
 
     max = MAX_NUMBER+1 # args.maximum_integer  # 1000
     N = 100000 # args.number_of_instances  # 100K
-    train_frac = 80000 # args.train_fraction  # 80K
-    val_frac = 10000 # args.val_fraction  # 10K
+    train_frac = 0.8 # args.train_fraction  # 80K
+    val_frac = 0.1 # args.val_fraction  # 10K
     ds = sample(list(product(range(0, max), ["+", "-"], range(0, max))), N)
 
     train_data = ds[: math.floor(train_frac * N)]
