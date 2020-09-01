@@ -186,7 +186,7 @@ def build_dataset():
     y_test = np.zeros((n_test, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.float32)
 
     for i, equation in enumerate(itertools.islice(generator, n_test)):
-        print(equation)
+        # print(equation)
         result = to_padded_string(
             eval(equation),
             padding=MAX_RESULT_LENGTH,
@@ -377,7 +377,29 @@ def main():
     print()
     print_example_predictions(20, model, x_test, y_test)
     print()
+    print("Testing...")
+    predict(model,'10+0')
 
+
+def predict(model, equation):
+    """
+    Given a model and an equation string, returns the predicted result.
+    """
+    order = -1 if REVERSE else 1
+
+    x = np.zeros((1, MAX_EQUATION_LENGTH, N_FEATURES), dtype=np.bool)
+    equation += '\0'
+
+    encoder = OneHotEncoder(OPERATIONS)
+
+    for t, char in enumerate(equation):
+        # print(char)
+        x[0, t, encoder.char_to_one_hot_index(char)] = 1
+    # print(x)
+    predictions = model.predict(x)
+    # print(predictions)
+    print(encoder.one_hot_to_string(predictions[0])[::order].strip())
+    return encoder.one_hot_to_string(predictions[0])[::order].strip() #[:-1]
 
 if __name__ == '__main__':
     main()
