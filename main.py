@@ -186,6 +186,7 @@ def build_dataset():
     y_test = np.zeros((n_test, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.float32)
 
     for i, equation in enumerate(itertools.islice(generator, n_test)):
+        print(equation)
         result = to_padded_string(
             eval(equation),
             padding=MAX_RESULT_LENGTH,
