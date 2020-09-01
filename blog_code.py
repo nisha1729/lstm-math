@@ -35,7 +35,7 @@ import numpy as np
 
 CHARS = [' ', '+', '\0'] + [str(n) for n in range(10)]
 CHAR_TO_INDEX = {i: c for c, i in enumerate(CHARS)}
-INDEX_TO_CHAR = {c: i for c, i in enumerate(CHARS)}
+    INDEX_TO_CHAR = {c: i for c, i in enumerate(CHARS)}
 
 def one_hot_to_index(vector):
     if not np.any(vector):

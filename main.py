@@ -8,6 +8,7 @@ Written by Max Schumacher (@cpury) in Summer 2017.
 """
 
 
+
 from __future__ import print_function
 import random
 import itertools
@@ -25,19 +26,28 @@ from tensorflow.keras.optimizers import Adam
 from encode import OneHotEncoder
 from visualize import print_activations
 
+# for datagenerator
+
+from itertools import product
+from random import sample
+import argparse
+import math
+import operator
+
 RANDOM_SEED = 1
 
 MIN_NUMBER = 0
 MAX_NUMBER = 999
 DECIMALS = 0
 
-OPERATIONS = ['+']
-N_OPERATIONS = 1
+OPERATIONS = ['+','-']
+N_OPERATIONS = 1 #number of operators per equation, N_op = 2 for a+b+c etc
 
-MAX_N_EXAMPLES = (
-    (MAX_NUMBER - MIN_NUMBER) ** (N_OPERATIONS + 1) * len(OPERATIONS)
-)
-N_EXAMPLES = int(round(MAX_N_EXAMPLES / 16.))
+# MAX_N_EXAMPLES = (
+#     (MAX_NUMBER - MIN_NUMBER) ** (N_OPERATIONS + 1) * len(OPERATIONS)
+# )
+# N_EXAMPLES = int(round(MAX_N_EXAMPLES / 16.))
+N_EXAMPLES = 100000
 N_FEATURES = 10 + len(OPERATIONS) + 2
 MAX_NUMBER_LENGTH_LEFT_SIDE = (
     max(len(str(MAX_NUMBER)), len(str(MIN_NUMBER))) +
@@ -103,37 +113,60 @@ def generate_all_equations(
     Okay, when there's multiple possible types of operations, this will not
     generate ALL the equations, but a good chunk of them.
     """
+
     # Generate all possible unique sets of numbers
-    number_permutations = itertools.permutations(
-        range(MIN_NUMBER, MAX_NUMBER + 1), N_OPERATIONS + 1
-    )
+    # number_permutations = itertools.permutations(
+    #     range(MIN_NUMBER, MAX_NUMBER + 1), N_OPERATIONS + 1
+    # )
+    #
+    # if shuffle:
+    #     number_permutations = list(number_permutations)
+    #     random.shuffle(number_permutations)
+    #
+    # if max_count is not None:
+    #     number_permutations = itertools.islice(number_permutations, max_count)
+    #
+    # for numbers in number_permutations:
+    #     numbers = [
+    #         to_padded_string(
+    #             n,
+    #             padding=MAX_NUMBER_LENGTH_LEFT_SIDE,
+    #             decimals=DECIMALS,
+    #         )
+    #         for n in numbers
+    #     ]
+    #
+    #     equation = numbers[0]
+    #     for j in range(N_OPERATIONS):
+    #         operation = random.choice(OPERATIONS)
+    #         equation += ' {} {}'.format(operation, numbers[j + 1])
+    #
+    #
+    #
+    #     yield to_padded_string(
+    #         equation,
+    #         padding=MAX_EQUATION_LENGTH,
+    #     )
 
-    if shuffle:
-        number_permutations = list(number_permutations)
-        random.shuffle(number_permutations)
+    max = MAX_NUMBER+1 # args.maximum_integer  # 1000
+    N = 100000 # args.number_of_instances  # 100K
+    train_frac = 80000 # args.train_fraction  # 80K
+    val_frac = 10000 # args.val_fraction  # 10K
+    ds = sample(list(product(range(0, max), ["+", "-"], range(0, max))), N)
 
-    if max_count is not None:
-        number_permutations = itertools.islice(number_permutations, max_count)
+    train_data = ds[: math.floor(train_frac * N)]
+    val_data = ds[math.floor(train_frac * N): math.floor((train_frac + val_frac) * N)]
+    # test_data = ds[math.floor((train_frac + val_frac) * N):]
 
-    for numbers in number_permutations:
-        numbers = [
-            to_padded_string(
-                n,
-                padding=MAX_NUMBER_LENGTH_LEFT_SIDE,
-                decimals=DECIMALS,
-            )
-            for n in numbers
-        ]
-
-        equation = numbers[0]
-        for j in range(N_OPERATIONS):
-            operation = random.choice(OPERATIONS)
-            equation += ' {} {}'.format(operation, numbers[j + 1])
-
-        yield to_padded_string(
-            equation,
-            padding=MAX_EQUATION_LENGTH,
-        )
+    for data in [train_data, val_data]:
+        if data != []:
+            for instance in data:
+                i1, op, i2 = instance
+                equation = str(i1) + " " + op + " " + str(i2)
+                yield to_padded_string(
+                    equation,
+                    padding=MAX_EQUATION_LENGTH,
+                )
 
 
 def build_dataset():
@@ -142,6 +175,7 @@ def build_dataset():
     Returns (x_test, y_test, x_train, y_train).
     """
     generator = generate_all_equations(max_count=N_EXAMPLES)
+
 
     n_test = round(SPLIT * N_EXAMPLES)
     n_train = N_EXAMPLES - n_test
