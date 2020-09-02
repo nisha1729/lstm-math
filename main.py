@@ -40,28 +40,22 @@ MIN_NUMBER = 0
 MAX_NUMBER = 999
 DECIMALS = 0
 
-OPERATIONS = ['+','-']
-N_OPERATIONS = 1 #number of operators per equation, N_op = 2 for a+b+c etc
+OPERATIONS = ['+', '-']
+N_OPERATIONS = 1    #number of operators per equation, N_op = 2 for a+b+c etc
 
 # MAX_N_EXAMPLES = (
 #     (MAX_NUMBER - MIN_NUMBER) ** (N_OPERATIONS + 1) * len(OPERATIONS)
 # )
 # N_EXAMPLES = int(round(MAX_N_EXAMPLES / 16.))
 N_EXAMPLES = 100000
-N_FEATURES = 10 + len(OPERATIONS) + 2
-MAX_NUMBER_LENGTH_LEFT_SIDE = (
-    max(len(str(MAX_NUMBER)), len(str(MIN_NUMBER))) +
-    (DECIMALS + 1 if DECIMALS else 0)
-)
-MAX_NUMBER_LENGTH_RIGHT_SIDE = (
-    MAX_NUMBER_LENGTH_LEFT_SIDE * (N_OPERATIONS + 1) + 1 +
-    (DECIMALS + 1 if DECIMALS else 0)
-)
-MAX_EQUATION_LENGTH = (MAX_NUMBER_LENGTH_LEFT_SIDE + 2) * (1 + N_OPERATIONS)
+N_FEATURES = 10 + len(OPERATIONS) + 1 # no '\0' at the end of line
+MAX_NUMBER_LENGTH_LEFT_SIDE = (max(len(str(MAX_NUMBER)), len(str(MIN_NUMBER))) + (DECIMALS + 1 if DECIMALS else 0))
+MAX_NUMBER_LENGTH_RIGHT_SIDE = (MAX_NUMBER_LENGTH_LEFT_SIDE * (N_OPERATIONS + 1) + 1 + (DECIMALS + 1 if DECIMALS else 0))
+MAX_EQUATION_LENGTH = (MAX_NUMBER_LENGTH_LEFT_SIDE + 1) * (1 + N_OPERATIONS) + 1
 MAX_RESULT_LENGTH = MAX_NUMBER_LENGTH_RIGHT_SIDE
 REVERSE = True
 
-SPLIT = .1
+SPLIT = 0.1
 LEARNING_RATE = 0.01
 EPOCHS = 200
 BATCH_SIZE = 256
@@ -70,6 +64,11 @@ ENCODER_DEPTH = 1
 DECODER_DEPTH = 1
 DROPOUT = 0
 BATCH_NORM = False
+
+max = MAX_NUMBER + 1
+train_frac = 0.8
+val_frac = 0.1
+
 
 encoder = OneHotEncoder(OPERATIONS)
 
@@ -148,17 +147,13 @@ def generate_all_equations(
     #         padding=MAX_EQUATION_LENGTH,
     #     )
 
-    max = MAX_NUMBER+1 # args.maximum_integer  # 1000
-    N = 100000 # args.number_of_instances  # 100K
-    train_frac = 0.8 # args.train_fraction  # 80K
-    val_frac = 0.1 # args.val_fraction  # 10K
-    ds = sample(list(product(range(0, max), ["+", "-"], range(0, max))), N)
+    ds = sample(list(product(range(0, max), ["+", "-"], range(0, max))), N_EXAMPLES)
 
-    train_data = ds[: math.floor(train_frac * N)]
-    val_data = ds[math.floor(train_frac * N): math.floor((train_frac + val_frac) * N)]
-    # test_data = ds[math.floor((train_frac + val_frac) * N):]
+    train_data = ds[: math.floor(train_frac * N_EXAMPLES)]
+    val_data = ds[math.floor(train_frac * N_EXAMPLES): math.floor((train_frac + val_frac) * N_EXAMPLES)]
+    test_data = ds[math.floor((train_frac + val_frac) * N_EXAMPLES):]
 
-    for data in [train_data, val_data]:
+    for data in [train_data, val_data, test_data]:
         if data != []:
             for instance in data:
                 i1, op, i2 = instance
@@ -176,9 +171,9 @@ def build_dataset():
     """
     generator = generate_all_equations(max_count=N_EXAMPLES)
 
-
     n_test = round(SPLIT * N_EXAMPLES)
-    n_train = N_EXAMPLES - n_test
+    n_val = round(SPLIT * N_EXAMPLES)
+    n_train = N_EXAMPLES - n_test - n_val
 
     order = -1 if REVERSE else 1
 
@@ -186,7 +181,6 @@ def build_dataset():
     y_test = np.zeros((n_test, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.float32)
 
     for i, equation in enumerate(itertools.islice(generator, n_test)):
-        # print(equation)
         result = to_padded_string(
             eval(equation),
             padding=MAX_RESULT_LENGTH,
@@ -199,12 +193,25 @@ def build_dataset():
         for t, char in enumerate(result[::order]):
             y_test[i, t, encoder.char_to_one_hot_index(char)] = 1
 
-    x_train = np.zeros(
-        (n_train, MAX_EQUATION_LENGTH, N_FEATURES), dtype=np.bool
-    )
-    y_train = np.zeros(
-        (n_train, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.bool
-    )
+    x_val = np.zeros((n_test, MAX_EQUATION_LENGTH, N_FEATURES), dtype=np.float32)
+    y_val = np.zeros((n_test, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.float32)
+
+    for i, equation in enumerate(itertools.islice(generator, n_val)):
+        # print(equation)
+        result = to_padded_string(
+            eval(equation),
+            padding=MAX_RESULT_LENGTH,
+            decimals=DECIMALS,
+        )
+
+        for t, char in enumerate(equation[::order]):
+            x_val[i, t, encoder.char_to_one_hot_index(char)] = 1
+
+        for t, char in enumerate(result[::order]):
+            y_val[i, t, encoder.char_to_one_hot_index(char)] = 1
+
+    x_train = np.zeros((n_train, MAX_EQUATION_LENGTH, N_FEATURES), dtype=np.bool)
+    y_train = np.zeros((n_train, MAX_RESULT_LENGTH, N_FEATURES), dtype=np.bool)
 
     for i, equation in enumerate(generator):
         result = to_padded_string(
@@ -219,7 +226,7 @@ def build_dataset():
         for t, char in enumerate(result[::order]):
             y_train[i, t, encoder.char_to_one_hot_index(char)] = 1
 
-    return x_test, y_test, x_train, y_train
+    return x_test, y_test, x_val, y_val, x_train, y_train
 
 
 def build_model():
@@ -306,7 +313,7 @@ def print_example_predictions(count, model, x_test, y_test):
     """
     Print some example predictions along with their target from the test set.
     """
-    print('Examples:')
+    print('Examples from test data:')
 
     order = -1 if REVERSE else 1
 
@@ -314,6 +321,7 @@ def print_example_predictions(count, model, x_test, y_test):
         x_test.shape[0], size=count, replace=False
     )
     predictions = model.predict(x_test[prediction_indices, :])
+    print(x_test[prediction_indices, :].shape)
 
     for i in range(count):
         print('{} = {}   (expected: {})'.format(
@@ -338,7 +346,7 @@ def main():
     # Fix the random seed to get a consistent dataset
     random.seed(RANDOM_SEED)
 
-    x_test, y_test, x_train, y_train = build_dataset()
+    x_test, y_test, x_val, y_val, x_train, y_train = build_dataset()
 
     model = build_model()
 
@@ -346,7 +354,7 @@ def main():
     print()
 
     # Evaluate the model before training to get a feel for the metrics:
-    loss, accuracy = model.evaluate(x_test, y_test, batch_size=BATCH_SIZE, verbose=0)
+    loss, accuracy = model.evaluate(x_val, y_val, batch_size=BATCH_SIZE, verbose=0)
 
     print()
     print('Before training. val_loss: {:.4} - val_acc: {:.4}'.format(
@@ -363,7 +371,7 @@ def main():
             x_train, y_train,
             epochs=EPOCHS,
             batch_size=BATCH_SIZE,
-            validation_data=(x_test, y_test),
+            validation_data=(x_val, y_val),
             callbacks=[
                 ModelCheckpoint(
                     'model.h5',
@@ -377,23 +385,21 @@ def main():
     print()
     print_example_predictions(20, model, x_test, y_test)
     print()
-    print("Testing...")
-    predict(model,'10+0')
 
 
-def predict(model, equation):
+def predict_test(model, equation):
     """
     Given a model and an equation string, returns the predicted result.
     """
     order = -1 if REVERSE else 1
 
     x = np.zeros((1, MAX_EQUATION_LENGTH, N_FEATURES), dtype=np.bool)
-    equation += '\0'
 
-    encoder = OneHotEncoder(OPERATIONS)
+    padded_eqn = to_padded_string(equation, padding=MAX_EQUATION_LENGTH)
+    print(padded_eqn)
 
-    for t, char in enumerate(equation):
-        # print(char)
+    for t, char in enumerate(padded_eqn):
+        # print("char:", char)
         x[0, t, encoder.char_to_one_hot_index(char)] = 1
     # print(x)
     predictions = model.predict(x)
@@ -401,5 +407,12 @@ def predict(model, equation):
     print(encoder.one_hot_to_string(predictions[0])[::order].strip())
     return encoder.one_hot_to_string(predictions[0])[::order].strip() #[:-1]
 
+
 if __name__ == '__main__':
-    main()
+    # main()
+    REVERSE = True
+    saved_model = build_model()
+    saved_model.load_weights('model.h5')
+    print("Testing...")
+    predict_test(saved_model, '111 + 100')
+    predict_test(saved_model, '500 + 700')

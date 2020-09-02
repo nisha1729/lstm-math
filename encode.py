@@ -23,6 +23,7 @@ class OneHotEncoder:
 
         self.c_to_i = {i: c for c, i in enumerate(self._chars)}
         self.i_to_c = {c: i for c, i in enumerate(self._chars)}
+        # print(self._chars)
 
     def one_hot(self, index, length):
         """
