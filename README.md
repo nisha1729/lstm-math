@@ -12,5 +12,11 @@ Written by Max Schumacher (@cpury) in Summer 2017. Updated in Summer 2019.
 
 This uses a Seq2Seq model based on LSTMs in Keras. Depending on the complexity
 of equations you choose, it will train on some small percentage of the complete
-equation space and validate on another small percentage. So all the equations you
-see in the example above have not been seen by the network before.
+equation space and validate on another small percentage. The model then learns 
+to predict the right hand side for new equations as given below
+
+` 67 + 38 =  108   (expected:  105)
+  15 + 49 =   69   (expected:   64)
+  84 - 91 =   -5   (expected:   -7)
+  71 + 53 =  123   (expected:  124)
+  72 -  1 =   75   (expected:   71)`
